@@ -1,0 +1,17 @@
+## tinyDB -> A fast minimal distributed key value store
+
+A sub 1000 line distributed key value store optimized for reading files between 1mb and 1GB, Inspired by minikeyvalue, it was updated years ago so i wanted to build a new one + learn about db and distribution techniques from scratch.
+
+##API
+
+- GET /key
+  - Support Range Requests
+  - 302 reirect to volume server
+
+- {PUT, DELETE} /key
+   - Blocks. 200 = written, else = nothing happened
+
+
+## Master Server at 3000
+
+## Volume server at 3001

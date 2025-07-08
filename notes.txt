@@ -1,0 +1,42 @@
+TinyDB i have no idea how to buil honestly so lets explore.
+___
+
+what is a distributed key value store first?
+i know what a key value store is, key value store is like this:
+
+key -> value
+foo -> bar 
+
+key: is the refrence or location of the data.
+value can be anything from complex objects to simple text. 
+
+so why are we using key value pairs to store data anyways we could use tables, documents to store data right?
+we are ddoing a key-value pair because when we are searching for some data in normal db's(SQL or DOC based) as tables or colums which is good for optimization, compresions and performance but becomes less flexible for use cases like video/text/filestorage(s3 like setup).
+
+so our key-value pair becomes much more flexible and fast for read/write operations since we are just looking for a key in the db.
+
+____
+
+so how does tinyDB looks:
+
+- volumes server
+- master server
+
+for now this is enough ig
+
+- the volume server is our db engine it does the GET, PUT, DELETE on our db
+- the master server knows in which volume specific key is stored -> basically the master server has the map of where the shit is, if the master dies we are fucked thats why we keep logs so even if our server dies when we boot it back up we just copy the logs to our masters in memory hence preventing data loss(kindaa)
+
+
+so lets start by builing the engine the heart of our project which is volume server
+these are the thing it should do based on my current knowedlge:
+- GET/key req to get a key
+- PUT to store key value pair in db -> return 201 -> if nothing returned nothing got saved()
+- DELETE/key -> return 204, else nothing returned
+
+the volume should contain a directory name such as "./tinydb/tmp/volume1"
+
+working:
+- we get a file streamed to our server -> take it store it in ./tinydb/tmp/volume1/hash_filename.format that will be our key and the data get stored in the file -> return 200ok 
+- when user requests a specific key -> just redirect the user to ./tinydb/tmp/volume1/key instead of streaming its much easier and less load something like s3 right?
+- when user hits delete with a specific key -> just remove the file and return 204
