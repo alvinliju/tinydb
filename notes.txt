@@ -1,14 +1,14 @@
-TinyDB i have no idea how to buil honestly so lets explore.
+TinyDB i have no idea how to build honestly so lets explore.
 ___
 
 what is a distributed key value store first?
 i know what a key value store is, key value store is like this:
 
 key -> value
-foo -> bar 
+foo -> bar
 
 key: is the refrence or location of the data.
-value can be anything from complex objects to simple text. 
+value can be anything from complex objects to simple text.
 
 so why are we using key value pairs to store data anyways we could use tables, documents to store data right?
 we are ddoing a key-value pair because when we are searching for some data in normal db's(SQL or DOC based) as tables or colums which is good for optimization, compresions and performance but becomes less flexible for use cases like video/text/filestorage(s3 like setup).
@@ -37,6 +37,6 @@ these are the thing it should do based on my current knowedlge:
 the volume should contain a directory name such as "./tinydb/tmp/volume1"
 
 working:
-- we get a file streamed to our server -> take it store it in ./tinydb/tmp/volume1/hash_filename.format that will be our key and the data get stored in the file -> return 200ok 
+- we get a file streamed to our server -> take it store it in ./tinydb/tmp/volume1/hash_filename.format that will be our key and the data get stored in the file -> return 200ok
 - when user requests a specific key -> just redirect the user to ./tinydb/tmp/volume1/key instead of streaming its much easier and less load something like s3 right?
 - when user hits delete with a specific key -> just remove the file and return 204

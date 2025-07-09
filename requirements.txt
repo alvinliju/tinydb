@@ -2,6 +2,8 @@
 
 A sub 1000 line distributed key value store optimized for reading files between 1mb and 1GB, Inspired by minikeyvalue, it was updated years ago so i wanted to build a new one + learn about db and distribution techniques from scratch.
 
+should scale to 2billion files(i am fuckedd)
+
 ##API
 
 - GET /key
