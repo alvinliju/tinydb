@@ -5,10 +5,18 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 )
 
-//now our master gets a put requests and
+// now our master gets a put requests and
 // it forwards it to the volume server and return something
+var httpClient *http.Client
+
+func init() {
+	httpClient = &http.Client{
+		Timeout: 10 * time.Second,
+	}
+}
 
 func main() {
 	http.HandleFunc("/", handleRequests)
@@ -23,8 +31,8 @@ func handleRequests(w http.ResponseWriter, r *http.Request) {
 	case "PUT":
 		handlePut(w, r)
 
-	// case "DELETE":
-	// 	handleDelete(w, r)
+	case "DELETE":
+		handleDelete(w, r)
 
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -50,7 +58,7 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := &http.Client{}
+	client := httpClient
 	resp, err := client.Do(request)
 	if err != nil {
 		log.Printf("Master: Error sending PUT request to volume server %s: %v", volumeServer, err)
@@ -83,5 +91,44 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 
 	http.Redirect(w, r, volumeServer, http.StatusMovedPermanently)
 
+}
+
+func handleDelete(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Path[len("/"):]
+	if key == "" {
+		http.Error(w, "Key required", http.StatusBadRequest)
+		return
+	}
+
+	//TODO:ping volumes and load pick a random one and store to keyvalue store
+	volumeServer := "http://localhost:3001/files/" + key
+	request, err := http.NewRequest("DELETE", volumeServer, r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	client := httpClient
+	resp, err := client.Do(request)
+	if err != nil {
+		log.Printf("Master: Error sending PUT request to volume server %s: %v", volumeServer, err)
+		// A 502 Bad Gateway is appropriate if the upstream server (Volume Server) is unreachable or errors out.
+		http.Error(w, "Failed to store file: volume server unreachable or error", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	volumeRespBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, "Failed to read response from volume server", http.StatusInternalServerError)
+		return
+	}
+
+	if resp.StatusCode != 204 {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Printf("Here is the key %s", string(volumeRespBody))
 	w.WriteHeader(http.StatusCreated)
 }
