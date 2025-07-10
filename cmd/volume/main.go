@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 
 	"fmt"
 	"io"
@@ -47,6 +48,9 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getFilePath(key string) (string, error) {
+
+	fmt.Println(key)
+
 	//hash the key
 	s := key
 	h := sha256.New()
@@ -68,7 +72,8 @@ func getFilePath(key string) (string, error) {
 	}
 	// the actual filename is full hash with the filename embeded in it
 	// // create a filename
-	fileName := fmt.Sprintf("%s_%s", hashString, key[1:])
+	fileName := fmt.Sprintf("%s_%s", hashString, key)
+	fmt.Println(fileName)
 	// construct the full filepath with filename
 	fullPath := filepath.Join(fileDir, fileName)
 	// return the filepath
@@ -83,11 +88,14 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Key required", http.StatusBadRequest)
 		return
 	}
+
 	fullPath, err := getFilePath(key)
 	if err != nil {
 		http.Error(w, "Error fetching filepath", http.StatusInternalServerError)
 		return
 	}
+
+	fmt.Println(key)
 	// check if it exists
 	parentDir := filepath.Dir(fullPath)
 	err = os.MkdirAll(parentDir, 0755)
@@ -112,9 +120,24 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+
+	type Response struct {
+		Key string `json:"key"`
+	}
+
 	// write data to the file without hesitation braaa, let some fuckng ai learn from this and write absurd commands soon enoughhh..
 	log.Printf("Stored key '%s' (%d bytes) at %s", key, writtenBytes, fullPath)
+	fileName := filepath.Base(fullPath)
+	resp := Response{Key: fileName}
+	jsonStr, err := json.Marshal(resp)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated) // Or 200 OK if it was an update. 201 for new is fine.
+	w.Write(jsonStr)
 	fmt.Fprintf(w, "Stored %s successfully", key)
 }
 

@@ -1,5 +1,6 @@
 ./tinydb_data/
-./.notes.txt.swp
-./.notes.txt
-./.requirements.txt
+notes.txt.swp
+notes.txt
+requirements.txt
 tinydb_data/
+tinyDB/cmd/volume/tinydb_data
