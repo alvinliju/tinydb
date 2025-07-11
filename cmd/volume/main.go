@@ -138,7 +138,7 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated) // Or 200 OK if it was an update. 201 for new is fine.
 	w.Write(jsonStr)
-	fmt.Fprintf(w, "Stored %s successfully", key)
+
 }
 
 func handleGet(w http.ResponseWriter, r *http.Request) {
@@ -150,6 +150,9 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 	d1 := key[:2]
 	d2 := key[2:4]
 	fullPath := filepath.Join(storageRoot, d1, d2, key)
+	fileName := filepath.Base(fullPath)
+
+	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
 
 	http.ServeFile(w, r, fullPath)
 }
