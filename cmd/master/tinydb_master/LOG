@@ -1,0 +1,25 @@
+=============== Jul 11, 2025 (IST) ===============
+16:18:14.767300 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+16:18:14.776427 db@open opening
+16:18:14.777517 version@stat F·[] S·0B[] Sc·[]
+16:18:14.787657 db@janitor F·2 G·0
+16:18:14.787804 db@open done T·11.293917ms
+=============== Jul 11, 2025 (IST) ===============
+16:18:23.583492 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+16:18:23.584201 version@stat F·[] S·0B[] Sc·[]
+16:18:23.584221 db@open opening
+16:18:23.584288 journal@recovery F·1
+16:18:23.584889 journal@recovery recovering @1
+16:18:23.585302 version@stat F·[] S·0B[] Sc·[]
+16:18:23.597490 db@janitor F·2 G·0
+16:18:23.597548 db@open done T·13.312375ms
+=============== Jul 11, 2025 (IST) ===============
+16:22:54.213117 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+16:22:54.214240 version@stat F·[] S·0B[] Sc·[]
+16:22:54.214271 db@open opening
+16:22:54.214361 journal@recovery F·1
+16:22:54.215021 journal@recovery recovering @2
+16:22:54.221667 memdb@flush created L0@4 N·1 S·142B "test.txt,v1":"test.txt,v1"
+16:22:54.222344 version@stat F·[1] S·142B[142B] Sc·[0.25]
+16:22:54.235340 db@janitor F·3 G·0
+16:22:54.235452 db@open done T·21.157125ms
