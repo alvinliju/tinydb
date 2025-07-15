@@ -1,10 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
@@ -18,6 +23,8 @@ var db *leveldb.DB
 
 var volumeServers = []string{
 	"http://localhost:3001",
+	"http://localhost:3002",
+	"http://localhost:3003",
 }
 
 func selectVolumeServer() string {
@@ -68,38 +75,57 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// volumeServer := "http://localhost:3001/file/" + key
-	//we recieve the request right?
-	// we have the key and we have the data in the request body
-	//create me put request and send the data to the volume shit
-	volumeServer := selectVolumeServer()
-	redirectURI := volumeServer + "/files/" + key
-	request, err := http.NewRequest("PUT", redirectURI, r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	//hashes filename in our volume server
+	// since the key and hash algo is the same all the servers should return the same hashed file name
+	var hashKeyFromResponse string = ""
+
+	var buf bytes.Buffer
+	body := io.TeeReader(r.Body, &buf)
+	//we nee to write to all the three volumes
+	for i := 0; i < len(volumeServers); i++ {
+
+		if i != 0 {
+			body = bytes.NewReader(buf.Bytes())
+		}
+
+		rVolume := volumeServers[i]
+		redirectURI := rVolume + "/files/" + key
+		request, err := http.NewRequest("PUT", redirectURI, body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		client := httpClient
+		resp, err := client.Do(request)
+		if err != nil {
+			log.Printf("Master: Error sending PUT request to volume server %s: %v", redirectURI, err)
+			http.Error(w, "Failed to store file: volume server unreachable or error", http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			http.Error(w, "Failed to read response from volume server", http.StatusInternalServerError)
+			return
+		}
+
+		var result map[string]string
+		json.Unmarshal(data, &result)
+		hashKeyFromResponse = result["key"]
+		fmt.Println(hashKeyFromResponse, "inside the loop getting the key")
 	}
 
-	client := httpClient
-	resp, err := client.Do(request)
-	if err != nil {
-		log.Printf("Master: Error sending PUT request to volume server %s: %v", redirectURI, err)
-		http.Error(w, "Failed to store file: volume server unreachable or error", http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
+	//TODO: figure out a way to add the subvolumes dynamically
+	encoded := hex.EncodeToString([]byte(strings.Join(volumeServers, ",")))
+	fmt.Println(encoded, "value", "value shit ")
 
-	volumeRespBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		http.Error(w, "Failed to read response from volume server", http.StatusInternalServerError)
-		return
-	}
-
-	err = db.Put([]byte(key), []byte(volumeServer), nil)
+	err := db.Put([]byte(hashKeyFromResponse), []byte(encoded), nil)
 	if err != nil {
 		http.Error(w, "Error saving key to master", http.StatusInternalServerError)
 	}
-	fmt.Printf("Here is the key %s", string(volumeRespBody))
+	fmt.Printf("Here is the key %s", string(hashKeyFromResponse))
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -111,8 +137,7 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//TODO check if the key exists in our master
-	volumeServer, err := db.Get([]byte(key), nil)
-	fmt.Println(string(volumeServer))
+	encoded, err := db.Get([]byte(key), nil)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
 			fmt.Println(err)
@@ -122,8 +147,12 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
+	decoded, _ := hex.DecodeString(string(encoded))
+	fmt.Println(decoded, "decoded")
 
-	redirectURI := string(volumeServer) + "/files/" + key
+	rVolume := strings.Split(string(decoded), ",")
+
+	redirectURI := string(rVolume[rand.Intn(2)]) + "/files/" + key
 	http.Redirect(w, r, string(redirectURI), http.StatusMovedPermanently)
 }
 

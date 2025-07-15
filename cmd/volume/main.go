@@ -26,9 +26,12 @@ func init() {
 }
 
 func main() {
+	args := os.Args
+	port := args[1]
+	fmt.Println(port)
 	http.HandleFunc("/files/", fileHandler)
 
-	log.Fatal(http.ListenAndServe(":3001", nil))
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 func fileHandler(w http.ResponseWriter, r *http.Request) {
