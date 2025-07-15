@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	_ "net/http/pprof"
+
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -21,15 +24,34 @@ var httpClient *http.Client
 
 var db *leveldb.DB
 
-var volumeServers = []string{
-	"http://localhost:3001",
-	"http://localhost:3002",
-	"http://localhost:3003",
+type VolumeGroup struct {
+	Replicas []string
 }
 
-func selectVolumeServer() string {
-	// Simple round-robin for now
-	return volumeServers[time.Now().UnixNano()%int64(len(volumeServers))]
+var volumeServers = []VolumeGroup{
+	{Replicas: []string{"http://localhost:3001", "http://localhost:3002", "http://localhost:3003"}},
+	{Replicas: []string{"http://localhost:3004", "http://localhost:3005", "http://localhost:3006"}},
+	{Replicas: []string{"http://localhost:3007", "http://localhost:3008", "http://localhost:3009"}},
+	{Replicas: []string{"http://localhost:3010", "http://localhost:3011", "http://localhost:3012"}},
+}
+
+func key2Volume(key string) VolumeGroup {
+	serverIndex := [4]int{0, 222, 333, 666}
+	//hash the key
+	hash := md5.Sum([]byte(key))
+	//take the hash and calculate the volumeServer Index cool?
+	x := int(hash[0]) % len(volumeServers)
+	var subVolIndex int
+	for index, element := range serverIndex {
+		if x <= element {
+			subVolIndex = index
+			break
+		}
+	}
+
+	shardedGroup := volumeServers[subVolIndex]
+
+	return shardedGroup
 }
 
 func init() {
@@ -79,16 +101,21 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 	// since the key and hash algo is the same all the servers should return the same hashed file name
 	var hashKeyFromResponse string = ""
 
+	//get volume servers
+	selectedSubVolume := key2Volume(key)
+
+	rVolumesFromSelectedSubVol := selectedSubVolume.Replicas
+
 	var buf bytes.Buffer
 	body := io.TeeReader(r.Body, &buf)
 	//we nee to write to all the three volumes
-	for i := 0; i < len(volumeServers); i++ {
+	for i := 0; i < len(rVolumesFromSelectedSubVol); i++ {
 
 		if i != 0 {
 			body = bytes.NewReader(buf.Bytes())
 		}
 
-		rVolume := volumeServers[i]
+		rVolume := rVolumesFromSelectedSubVol[i]
 		redirectURI := rVolume + "/files/" + key
 		request, err := http.NewRequest("PUT", redirectURI, body)
 		if err != nil {
@@ -118,7 +145,7 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//TODO: figure out a way to add the subvolumes dynamically
-	encoded := hex.EncodeToString([]byte(strings.Join(volumeServers, ",")))
+	encoded := hex.EncodeToString([]byte(strings.Join(rVolumesFromSelectedSubVol, ",")))
 	fmt.Println(encoded, "value", "value shit ")
 
 	err := db.Put([]byte(hashKeyFromResponse), []byte(encoded), nil)

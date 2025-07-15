@@ -1,8 +1,11 @@
 ./tinydb_data/
 notes.txt.swp
+.notes.txt.swp
 notes.txt
 upload
 requirements.txt
 tinydb_data/
 tinyDB/cmd/volume/tinydb_data
 tinyDB/cmd/master/tinydb_master
+/test
+cmd/master/tinydb_master/
