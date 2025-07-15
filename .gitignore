@@ -5,3 +5,4 @@ upload
 requirements.txt
 tinydb_data/
 tinyDB/cmd/volume/tinydb_data
+tinyDB/cmd/master/tinydb_master
