@@ -13,10 +13,20 @@ import (
 	"path/filepath"
 )
 
-var storageRoot = "./tinydb_data/volume_1/"
+var storageRoot = ""
+var port string = ""
 
 func init() {
-	if err := os.MkdirAll(storageRoot, os.ModePerm); err != nil {
+
+	args := os.Args
+	port = args[1]
+	fmt.Println(port)
+
+	rootStoragePath := fmt.Sprintf("./tinydb_data/volume_%s/", port)
+
+	storageRoot = filepath.Dir(rootStoragePath)
+
+	if err := os.MkdirAll(storageRoot, 0755); err != nil {
 
 		log.Fatal(err)
 	}
@@ -26,10 +36,14 @@ func init() {
 }
 
 func main() {
-	args := os.Args
-	port := args[1]
-	fmt.Println(port)
+
 	http.HandleFunc("/files/", fileHandler)
+
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		p := "UP AND RUNNING"
+		json.NewEncoder(w).Encode(p)
+		w.WriteHeader(http.StatusOK)
+	})
 
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }

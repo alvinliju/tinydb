@@ -1,0 +1,134 @@
+version: "3.8"
+services:
+  master:
+    build:
+      context: .
+      dockerfile: Dockerfile.master
+    ports:
+      - "3000:3000"
+    network_mode: "host"
+    depends_on:
+      - volume1
+      - volume2
+      - volume3
+      - volume4
+      - volume5
+      - volume6
+      - volume7
+      - volume8
+      - volume9
+      - volume10
+      - volume11
+      - volume12
+
+  volume1:
+    build:
+      context: .
+      dockerfile: Dockerfile.volume
+    ports:
+      - "3001:3001"
+    volumes:
+      - vol1_data:/data
+    command: ["3001"]
+
+  volume2:
+    image: tinydb-volume1
+    ports:
+      - "3002:3002"
+    volumes:
+      - vol2_data:/data
+    command: ["3002"]
+
+  volume3:
+    image: tinydb-volume1
+    ports:
+      - "3003:3003"
+    volumes:
+      - vol3_data:/data
+    command: ["3003"]
+
+  volume4:
+    image: tinydb-volume1
+    ports:
+      - "3004:3004"
+    volumes:
+      - vol4_data:/data
+    command: ["3004"]
+
+  volume5:
+    image: tinydb-volume1
+    ports:
+      - "3005:3005"
+    volumes:
+      - vol5_data:/data
+    command: ["3005"]
+
+  volume6:
+    image: tinydb-volume1
+    ports:
+      - "3006:3006"
+    volumes:
+      - vol6_data:/data
+    command: ["3006"]
+
+  volume7:
+    image: tinydb-volume1
+    ports:
+      - "3007:3007"
+    volumes:
+      - vol7_data:/data
+    command: ["3007"]
+
+  volume8:
+    image: tinydb-volume1
+    ports:
+      - "3008:3008"
+    volumes:
+      - vol8_data:/data
+    command: ["3008"]
+
+  volume9:
+    image: tinydb-volume1
+    ports:
+      - "3009:3009"
+    volumes:
+      - vol9_data:/data
+    command: ["3009"]
+
+  volume10:
+    image: tinydb-volume1
+    ports:
+      - "3010:3010"
+    volumes:
+      - vol10_data:/data
+    command: ["3010"]
+
+  volume11:
+    image: tinydb-volume1
+    ports:
+      - "3011:3011"
+    volumes:
+      - vol11_data:/data
+    command: ["3011"]
+
+  volume12:
+    image: tinydb-volume1
+    ports:
+      - "3012:3012"
+    volumes:
+      - vol12_data:/data
+    command: ["3012"]
+
+volumes:
+  vol1_data:
+  vol2_data:
+  vol3_data:
+  vol4_data:
+  vol5_data:
+  vol6_data:
+  vol7_data:
+  vol8_data:
+  vol9_data:
+  vol10_data:
+  vol11_data:
+  vol12_data:

@@ -3,12 +3,10 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -36,22 +34,12 @@ var volumeServers = []VolumeGroup{
 }
 
 func key2Volume(key string) VolumeGroup {
-	serverIndex := [4]int{0, 222, 333, 666}
 	//hash the key
 	hash := md5.Sum([]byte(key))
 	//take the hash and calculate the volumeServer Index cool?
 	x := int(hash[0]) % len(volumeServers)
-	var subVolIndex int
-	for index, element := range serverIndex {
-		if x <= element {
-			subVolIndex = index
-			break
-		}
-	}
-
-	shardedGroup := volumeServers[subVolIndex]
-
-	return shardedGroup
+	fmt.Println("Volume Group Index:", x)
+	return volumeServers[x]
 }
 
 func init() {
@@ -105,6 +93,7 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 	selectedSubVolume := key2Volume(key)
 
 	rVolumesFromSelectedSubVol := selectedSubVolume.Replicas
+	fmt.Println(rVolumesFromSelectedSubVol)
 
 	var buf bytes.Buffer
 	body := io.TeeReader(r.Body, &buf)
@@ -116,6 +105,7 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 		}
 
 		rVolume := rVolumesFromSelectedSubVol[i]
+		fmt.Println(rVolume, "curr volume being used")
 		redirectURI := rVolume + "/files/" + key
 		request, err := http.NewRequest("PUT", redirectURI, body)
 		if err != nil {
@@ -145,26 +135,30 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//TODO: figure out a way to add the subvolumes dynamically
-	encoded := hex.EncodeToString([]byte(strings.Join(rVolumesFromSelectedSubVol, ",")))
-	fmt.Println(encoded, "value", "value shit ")
+	value := strings.Join(rVolumesFromSelectedSubVol, ",")
+	fmt.Println(value, "value stored in db")
 
-	err := db.Put([]byte(hashKeyFromResponse), []byte(encoded), nil)
+	err := db.Put([]byte(hashKeyFromResponse), []byte(value), nil)
 	if err != nil {
 		http.Error(w, "Error saving key to master", http.StatusInternalServerError)
 	}
+
 	fmt.Printf("Here is the key %s", string(hashKeyFromResponse))
 	w.WriteHeader(http.StatusCreated)
 }
 
 func handleGet(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("here")
 	key := r.URL.Path[len("/"):]
 	if key == "" {
-		http.Error(w, "Key required", http.StatusBadRequest)
+		http.Error(w, "Key requiredddd", http.StatusBadRequest)
 		return
 	}
 
+	fmt.Println("here")
+
 	//TODO check if the key exists in our master
-	encoded, err := db.Get([]byte(key), nil)
+	v, err := db.Get([]byte(key), nil)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
 			fmt.Println(err)
@@ -174,12 +168,46 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
-	decoded, _ := hex.DecodeString(string(encoded))
-	fmt.Println(decoded, "decoded")
+	fmt.Println(string(v), "decoded shits")
 
-	rVolume := strings.Split(string(decoded), ",")
+	rVolume := strings.Split(string(v), ",")
 
-	redirectURI := string(rVolume[rand.Intn(2)]) + "/files/" + key
+	fmt.Println(rVolume, "rVolumes")
+	var healthyReplica string
+	for i := 0; i < len(rVolume); i++ {
+		//send a health check to the servers and choose a healthy one
+		url := rVolume[i] + "/health"
+		request, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			fmt.Println("Error during health check:", err)
+			continue
+		}
+
+		fmt.Println(request)
+		client := httpClient
+		resp, err := client.Do(request)
+		if err != nil {
+			fmt.Println("Error during health check:", err)
+			continue
+		}
+		defer resp.Body.Close()
+		fmt.Println(resp.Status)
+		if resp.StatusCode == 200 {
+			healthyReplica = rVolume[i]
+			fmt.Println(healthyReplica)
+			resp.Body.Close()
+			break
+		}
+	}
+
+	if healthyReplica == "" {
+		http.Error(w, "All replicas failed", http.StatusServiceUnavailable)
+		return
+	}
+
+	redirectURI := healthyReplica + "/files/" + key
+	fmt.Println("redirectURI:", redirectURI)
+	fmt.Println("rVolume:", rVolume)
 	http.Redirect(w, r, string(redirectURI), http.StatusMovedPermanently)
 }
 
@@ -191,42 +219,51 @@ func handleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//TODO:ping volumes and load pick a random one and store to keyvalue store
-	volumeServer, err := db.Get([]byte(key), nil)
-	redirectURI := string(volumeServer) + "/files" + key
-	fmt.Println(string(volumeServer))
+	v, err := db.Get([]byte(key), nil)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
+			fmt.Println(err)
 			http.Error(w, "key not found", http.StatusNotFound)
 			return
 		}
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
-	request, err := http.NewRequest("DELETE", string(redirectURI), r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	fmt.Println(string(v), "decoded shits")
 
-	client := httpClient
-	resp, err := client.Do(request)
-	if err != nil {
-		log.Printf("Master: Error sending DEL request to volume server %s: %v", redirectURI, err)
-		// A 502 Bad Gateway is appropriate if the upstream server (Volume Server) is unreachable or errors out.
-		http.Error(w, "Failed to store file: volume server unreachable or error", http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
+	rVolume := strings.Split(string(v), ",")
 
-	volumeRespBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		http.Error(w, "Failed to read response from volume server", http.StatusInternalServerError)
-		return
-	}
+	for _, elm := range rVolume {
 
-	if resp.StatusCode != 204 {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		redirectURI := string(elm) + "/files/" + key
+		request, err := http.NewRequest("DELETE", string(redirectURI), r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		client := httpClient
+		resp, err := client.Do(request)
+		if err != nil {
+			log.Printf("Master: Error sending DEL request to volume server %s: %v", redirectURI, err)
+			// A 502 Bad Gateway is appropriate if the upstream server (Volume Server) is unreachable or errors out.
+			http.Error(w, "Failed to store file: volume server unreachable or error", http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+
+		volumeRespBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			http.Error(w, "Failed to read response from volume server", http.StatusInternalServerError)
+			return
+		}
+
+		_ = volumeRespBody
+
+		if resp.StatusCode != 204 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 
 	err = db.Delete([]byte(key), nil)
@@ -235,6 +272,6 @@ func handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf(" %s Deleted", string(volumeRespBody))
+	fmt.Printf(" %s Deleted", string(key))
 	w.WriteHeader(http.StatusCreated)
 }
