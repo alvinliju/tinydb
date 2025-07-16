@@ -9,3 +9,6 @@ tinyDB/cmd/volume/tinydb_data
 tinyDB/cmd/master/tinydb_master
 /test
 cmd/master/tinydb_master/
+.env
+tinyDB/cmd/master/tinydb_master/
+cmd/master/tinydb_master
