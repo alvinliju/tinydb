@@ -6,7 +6,6 @@ services:
       dockerfile: Dockerfile.master
     ports:
       - "3000:3000"
-    network_mode: "host"
     depends_on:
       - volume1
       - volume2
@@ -32,7 +31,9 @@ services:
     command: ["3001"]
 
   volume2:
-    image: tinydb-volume1
+    build:
+      context: .
+      dockerfile: Dockerfile.volume
     ports:
       - "3002:3002"
     volumes:
@@ -40,7 +41,9 @@ services:
     command: ["3002"]
 
   volume3:
-    image: tinydb-volume1
+    build:
+      context: .
+      dockerfile: Dockerfile.volume
     ports:
       - "3003:3003"
     volumes:
@@ -48,7 +51,9 @@ services:
     command: ["3003"]
 
   volume4:
-    image: tinydb-volume1
+    build:
+      context: .
+      dockerfile: Dockerfile.volume
     ports:
       - "3004:3004"
     volumes:
@@ -56,7 +61,9 @@ services:
     command: ["3004"]
 
   volume5:
-    image: tinydb-volume1
+    build:
+      context: .
+      dockerfile: Dockerfile.volume
     ports:
       - "3005:3005"
     volumes:
@@ -64,7 +71,9 @@ services:
     command: ["3005"]
 
   volume6:
-    image: tinydb-volume1
+    build:
+      context: .
+      dockerfile: Dockerfile.volume
     ports:
       - "3006:3006"
     volumes:
@@ -72,7 +81,9 @@ services:
     command: ["3006"]
 
   volume7:
-    image: tinydb-volume1
+    build:
+      context: .
+      dockerfile: Dockerfile.volume
     ports:
       - "3007:3007"
     volumes:
@@ -80,7 +91,9 @@ services:
     command: ["3007"]
 
   volume8:
-    image: tinydb-volume1
+    build:
+      context: .
+      dockerfile: Dockerfile.volume
     ports:
       - "3008:3008"
     volumes:
@@ -88,7 +101,9 @@ services:
     command: ["3008"]
 
   volume9:
-    image: tinydb-volume1
+    build:
+      context: .
+      dockerfile: Dockerfile.volume
     ports:
       - "3009:3009"
     volumes:
@@ -96,7 +111,9 @@ services:
     command: ["3009"]
 
   volume10:
-    image: tinydb-volume1
+    build:
+      context: .
+      dockerfile: Dockerfile.volume
     ports:
       - "3010:3010"
     volumes:
@@ -104,7 +121,9 @@ services:
     command: ["3010"]
 
   volume11:
-    image: tinydb-volume1
+    build:
+      context: .
+      dockerfile: Dockerfile.volume
     ports:
       - "3011:3011"
     volumes:
@@ -112,7 +131,9 @@ services:
     command: ["3011"]
 
   volume12:
-    image: tinydb-volume1
+    build:
+      context: .
+      dockerfile: Dockerfile.volume
     ports:
       - "3012:3012"
     volumes:

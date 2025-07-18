@@ -143,7 +143,8 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error saving key to master", http.StatusInternalServerError)
 	}
 
-	fmt.Printf("Here is the key %s", string(hashKeyFromResponse))
+	userPayload := fmt.Sprintf("Here is the key %s", string(hashKeyFromResponse))
+	w.Write([]byte(userPayload))
 	w.WriteHeader(http.StatusCreated)
 }
 
