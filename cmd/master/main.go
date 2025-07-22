@@ -33,6 +33,13 @@ type Result struct {
 	Data    string
 }
 
+type ReadResult struct {
+	ID      int
+	Success bool
+	Replica string
+	Exists  bool
+}
+
 var volumeServers = []VolumeGroup{
 	{Replicas: []string{"http://localhost:3001", "http://localhost:3002", "http://localhost:3003"}},
 	{Replicas: []string{"http://localhost:3004", "http://localhost:3005", "http://localhost:3006"}},
@@ -49,7 +56,7 @@ func key2Volume(key string) VolumeGroup {
 	return volumeServers[x]
 }
 
-func worker(id int, ch chan<- Result, wg *sync.WaitGroup, replicaUrl string, body io.Reader, key string) {
+func getWorker(id int, ch chan<- Result, wg *sync.WaitGroup, replicaUrl string, body io.Reader, key string) {
 	defer wg.Done()
 
 	success, hashedKey := writeToReplica(replicaUrl, body, key)
@@ -131,7 +138,7 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 	for i := 1; i <= 3; i++ {
 		wg.Add(1)
 		bodyReader := bytes.NewReader(buf.Bytes())
-		go worker(i, resultChan, &wg, selectedSubVolume.Replicas[i-1], bodyReader, key)
+		go getWorker(i, resultChan, &wg, selectedSubVolume.Replicas[i-1], bodyReader, key)
 	}
 
 	wg.Wait()
@@ -225,43 +232,116 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 
 	rVolume := strings.Split(string(v), ",")
 
-	fmt.Println(rVolume, "rVolumes")
-	var healthyReplica string
-	for i := 0; i < len(rVolume); i++ {
-		//send a health check to the servers and choose a healthy one
-		url := rVolume[i] + "/health"
-		request, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			fmt.Println("Error during health check:", err)
-			continue
-		}
+	//after we get rVolumes
+	// create a read result channel
+	// create 3 workers and a read functions
+	// check if max numbers of quorums are met then redirect
 
-		fmt.Println(request)
-		client := httpClient
-		resp, err := client.Do(request)
-		if err != nil {
-			fmt.Println("Error during health check:", err)
-			continue
-		}
-		defer resp.Body.Close()
-		fmt.Println(resp.Status)
-		if resp.StatusCode == 200 {
-			healthyReplica = rVolume[i]
-			fmt.Println(healthyReplica)
-			resp.Body.Close()
-			break
+	var wg sync.WaitGroup
+	resultChan := make(chan ReadResult, len(rVolume))
+
+	for i, replicaUrl := range rVolume {
+		wg.Add(1)
+		go readWorker(i+1, resultChan, &wg, replicaUrl, key)
+	}
+
+	wg.Wait()
+	close(resultChan)
+
+	//collect results
+	var results []ReadResult
+	var healthyReplicas []string
+
+	// fmt.Println(rVolume, "rVolumes")
+	// var healthyReplica string
+	// for i := 0; i < len(rVolume); i++ {
+	// 	//send a health check to the servers and choose a healthy one
+	// 	url := rVolume[i] + "/health"
+	// 	request, err := http.NewRequest("GET", url, nil)
+	// 	if err != nil {
+	// 		fmt.Println("Error during health check:", err)
+	// 		continue
+	// 	}
+
+	// 	fmt.Println(request)
+	// 	client := httpClient
+	// 	resp, err := client.Do(request)
+	// 	if err != nil {
+	// 		fmt.Println("Error during health check:", err)
+	// 		continue
+	// 	}
+	// 	defer resp.Body.Close()
+	// 	fmt.Println(resp.Status)
+	// 	if resp.StatusCode == 200 {
+	// 		healthyReplica = rVolume[i]
+	// 		fmt.Println(healthyReplica)
+	// 		resp.Body.Close()
+	// 		break
+	// 	}
+	// }
+
+	for result := range resultChan {
+		results = append(results, result)
+		if result.Success && result.Exists {
+			healthyReplicas = append(healthyReplicas, result.Replica)
 		}
 	}
 
-	if healthyReplica == "" {
-		http.Error(w, "All replicas failed", http.StatusServiceUnavailable)
+	totalReplicas := len(rVolume)
+	requiredQuorum := (totalReplicas / 2) + 1
+
+	if len(healthyReplicas) < requiredQuorum {
+		http.Error(w, "File not available on enough replicas", http.StatusServiceUnavailable)
 		return
 	}
 
-	redirectURI := healthyReplica + "/files/" + key
+	redirectURI := healthyReplicas[0] + "/files/" + key
 	fmt.Println("redirectURI:", redirectURI)
 	fmt.Println("rVolume:", rVolume)
+	fmt.Printf("Quorum satisfied (%d/%d), redirecting to: %s\n", len(healthyReplicas), totalReplicas, redirectURI)
 	http.Redirect(w, r, string(redirectURI), http.StatusMovedPermanently)
+}
+
+func readWorker(id int, ch chan<- ReadResult, wg *sync.WaitGroup, replicaUrl string, key string) {
+	defer wg.Done()
+
+	//check if file exists with HEAD request
+	checkURI := replicaUrl + "/files/" + key
+	request, err := http.NewRequest("GET", checkURI, nil)
+	if err != nil {
+		fmt.Println("Error getting repsonse to HEAD request", err)
+		ch <- ReadResult{
+			ID:      id,
+			Success: false,
+			Replica: replicaUrl,
+			Exists:  false,
+		}
+		return
+	}
+
+	fmt.Println(request)
+	client := httpClient
+	resp, err := client.Do(request)
+	if err != nil {
+		fmt.Println("Error during HEAD request", err)
+		ch <- ReadResult{
+			ID:      id,
+			Success: false,
+			Replica: replicaUrl,
+			Exists:  false,
+		}
+		return
+	}
+	defer resp.Body.Close()
+
+	exists := resp.StatusCode == 200
+
+	ch <- ReadResult{
+		ID:      id,
+		Success: true,
+		Replica: replicaUrl,
+		Exists:  exists,
+	}
 }
 
 func handleDelete(w http.ResponseWriter, r *http.Request) {
