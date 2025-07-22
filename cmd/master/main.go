@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	_ "net/http/pprof"
@@ -26,6 +27,12 @@ type VolumeGroup struct {
 	Replicas []string
 }
 
+type Result struct {
+	ID      int
+	Success bool
+	Data    string
+}
+
 var volumeServers = []VolumeGroup{
 	{Replicas: []string{"http://localhost:3001", "http://localhost:3002", "http://localhost:3003"}},
 	{Replicas: []string{"http://localhost:3004", "http://localhost:3005", "http://localhost:3006"}},
@@ -40,6 +47,27 @@ func key2Volume(key string) VolumeGroup {
 	x := int(hash[0]) % len(volumeServers)
 	fmt.Println("Volume Group Index:", x)
 	return volumeServers[x]
+}
+
+func worker(id int, ch chan<- Result, wg *sync.WaitGroup, replicaUrl string, body io.Reader, key string) {
+	defer wg.Done()
+
+	success, hashedKey := writeToReplica(replicaUrl, body, key)
+
+	if !success {
+		ch <- Result{
+			ID:      id,
+			Success: false,
+			Data:    fmt.Sprintf("Task %d not completed", id),
+		}
+	} else {
+		ch <- Result{
+			ID:      id,
+			Success: true,
+			Data:    fmt.Sprintf("%s", hashedKey),
+		}
+	}
+
 }
 
 func init() {
@@ -96,42 +124,37 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(rVolumesFromSelectedSubVol)
 
 	var buf bytes.Buffer
-	body := io.TeeReader(r.Body, &buf)
+	io.TeeReader(r.Body, &buf)
 	//we nee to write to all the three volumes
-	for i := 0; i < len(rVolumesFromSelectedSubVol); i++ {
+	var wg sync.WaitGroup
+	resultChan := make(chan Result, 3)
+	for i := 1; i <= 3; i++ {
+		wg.Add(1)
+		bodyReader := bytes.NewReader(buf.Bytes())
+		go worker(i, resultChan, &wg, selectedSubVolume.Replicas[i-1], bodyReader, key)
+	}
 
-		if i != 0 {
-			body = bytes.NewReader(buf.Bytes())
+	wg.Wait()
+	close(resultChan)
+
+	// Collect results
+	var results []Result
+	for result := range resultChan {
+		results = append(results, result)
+		fmt.Printf("Received: %+v\n", result)
+	}
+
+	var successCount int = 0
+	for index := range results {
+		if results[index].Success == true {
+			hashKeyFromResponse = results[index].Data
+			successCount++
 		}
+	}
 
-		rVolume := rVolumesFromSelectedSubVol[i]
-		fmt.Println(rVolume, "curr volume being used")
-		redirectURI := rVolume + "/files/" + key
-		request, err := http.NewRequest("PUT", redirectURI, body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		client := httpClient
-		resp, err := client.Do(request)
-		if err != nil {
-			log.Printf("Master: Error sending PUT request to volume server %s: %v", redirectURI, err)
-			http.Error(w, "Failed to store file: volume server unreachable or error", http.StatusBadGateway)
-			return
-		}
-		defer resp.Body.Close()
-
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			http.Error(w, "Failed to read response from volume server", http.StatusInternalServerError)
-			return
-		}
-
-		var result map[string]string
-		json.Unmarshal(data, &result)
-		hashKeyFromResponse = result["key"]
-		fmt.Println(hashKeyFromResponse, "inside the loop getting the key")
+	if successCount < 2 {
+		http.Error(w, "Not enough quoram writes", http.StatusInternalServerError)
+		return
 	}
 
 	//TODO: figure out a way to add the subvolumes dynamically
@@ -146,6 +169,35 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 	userPayload := fmt.Sprintf("Here is the key %s", string(hashKeyFromResponse))
 	w.Write([]byte(userPayload))
 	w.WriteHeader(http.StatusCreated)
+}
+
+func writeToReplica(volumeString string, body io.Reader, key string) (bool, string) {
+	redirectURI := volumeString + "/files/" + key
+	request, err := http.NewRequest("PUT", redirectURI, body)
+	if err != nil {
+		log.Println(err.Error(), http.StatusInternalServerError)
+		return false, ""
+	}
+
+	client := httpClient
+	resp, err := client.Do(request)
+	if err != nil {
+		log.Printf("Master: Error sending PUT request to volume server %s: %v", redirectURI, err)
+		return false, ""
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("Failed to read response from volume server")
+		return false, ""
+	}
+
+	var result map[string]string
+	json.Unmarshal(data, &result)
+	hashKeyFromResponse := result["key"]
+
+	return true, hashKeyFromResponse
 }
 
 func handleGet(w http.ResponseWriter, r *http.Request) {

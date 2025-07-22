@@ -19,6 +19,9 @@ var port string = ""
 func init() {
 
 	args := os.Args
+	if len(args) < 2 {
+		log.Fatal("Usage: go run main.go <port>")
+	}
 	port = args[1]
 	fmt.Println(port)
 
