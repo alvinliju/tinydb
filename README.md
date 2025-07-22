@@ -1,88 +1,63 @@
 # TinyDB
 
-**TinyDB is a distributed, content-addressable key-value store designed to be fast, minimal, and radically simple.** Store files at high speed with just a few lines—built for hackers, tinkerers, and anyone exploring distributed storage.
+**Radically simple distributed storage. Fast, minimal, hackable.**
 
-## Features
+Built for hackers who want to understand how distributed systems actually work—without the enterprise bullshit.
 
-* **PUT/GET/DELETE over HTTP**—store and retrieve files via simple REST API.
-* **3-replica writes** with fault tolerance—distributed across volume servers.
-* **Content-addressable storage** using SHA256 keys; enables deduplication and immutability.
-* **Performance-focused:** 2.5GB/sec on a single volume in optimal conditions.
-* <1000 lines of clean Go code.
+## What it does
 
-## Quickstart
+* **HTTP API** → PUT/GET/DELETE files 
+* **Quorum everything** → 2/3 replicas for reads + writes
+* **SHA256 keys** → Content-addressable, deduplication 
+* **Fault tolerant** → Works with 1 replica down
+* **Zero-copy redirects** → No bottlenecks, no proxying
+* **<1500 lines of Go** → Read the source, hack it
 
-### Prerequisites
-
-* Go 1.20+
-* Linux/macOS/Windows
-* (Optional) Docker support
-
-### Run a Local Cluster
+## Quick start
 
 ```bash
-# Start the master
-go run master.go
+# Fire up the cluster
+cd cmd/master && go run main.go &
+cd cmd/volume && go run main.go 3001 &
+cd cmd/volume && go run main.go 3002 &
+cd cmd/volume && go run main.go 3003 &
 
-# Start some volume servers (use different ports)
-go run volume.go -port 3001
-go run volume.go -port 3002
-go run volume.go -port 3003
+# Or use the script
+./scripts/bash-scripts/start_volumes.sh
+
+# Store shit
+curl -X PUT localhost:3000/hack.txt -d "hello world"
+
+# Get shit back
+curl localhost:3000/hack.txt
+
+# Delete shit
+curl -X DELETE localhost:3000/hack.txt
 ```
 
-### Example API Usage
-
-```bash
-# Upload a file (returns hash)
-curl -X PUT localhost:3000/myfile --data-binary @file.txt
-
-# Download a file
-curl localhost:3000/myfile
-
-# Delete a file
-curl -X DELETE localhost:3000/myfile
-```
-
-## Architecture
+## How it works
 
 ```
-[Client] <-> [Master] <-> [3x Volume Servers (LevelDB)]
+Client → Master → [Volume1, Volume2, Volume3]
 ```
 
-* **Master**: Tracks where files are stored, routes requests, manages metadata in LevelDB.
-* **Volume servers**: Store file contents on disk, keyed by SHA256.
+* **Master**: Routes requests, enforces quorum, redirects to healthy replicas
+* **Volumes**: Store actual files, keyed by SHA256
+* **Quorum**: Need 2/3 replicas for any operation
 
-**Inspired by minikeyvalue and the spirit of small, hackable infrastructure.**
+Kill a volume server. Watch it keep working. That's distributed systems.
 
-## Performance
+## Why?
 
-* **PUT 1GB:** ~474 MB/s, 9KB RAM usage per op
-* **GET 1GB:** ~1.25 GB/s, zero-copy serving
-* **Concurrent test:** 100×1GB = ~5GB/s aggregate (multi-volume)
+Because most "distributed storage" is either:
+1. A black box you can't understand
+2. 50,000 lines of enterprise Java 
+3. Both
 
-## Why TinyDB?
-
-TinyDB aims to:
-
-* **Demystify distributed storage**—great for education, hacking, and prototyping.
-* Serve as a minimal backbone for larger, S3-like object stores.
-* Empower users to run their own distributed storage with full transparency and no unnecessary bloat.
+TinyDB is 1500 lines you can read in an hour. Fork it. Break it. Learn from it.
 
 ## Status
 
-🚧 **Working prototype. Breaking changes possible. Not production-ready—use for learning, testing, and fun!**
+🚧 **Working prototype. Perfect for learning, hacking, tinkering.**
 
-*Last updated: 2025-07-18*
-
-## Contributing
-
-Contributions, feedback, and issues are welcome!
-
-* See CONTRIBUTING.md *(coming soon)*
-* File an issue or open a pull request.
-
-## License
-
-MIT. See LICENSE for details.
-
-*Contact & discussion: Open a GitHub issue or join our Discord (TBD).*
+*Not production ready. Don't store your crypto keys here.*
