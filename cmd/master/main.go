@@ -398,37 +398,69 @@ func handleDelete(w http.ResponseWriter, r *http.Request) {
 
 	rVolume := strings.Split(string(v), ",")
 
-	for _, elm := range rVolume {
+	var wg sync.WaitGroup
+	resultChan := make(chan Result, 3)
+	for i := 1; i <= 3; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			redirectURI := string(rVolume[i-1]) + "/files/" + key
+			request, err := http.NewRequest("DELETE", string(redirectURI), r.Body)
+			if err != nil {
+				resultChan <- Result{ID: i + 1, Success: false, Data: err.Error()}
+				return
+			}
 
-		redirectURI := string(elm) + "/files/" + key
-		request, err := http.NewRequest("DELETE", string(redirectURI), r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			client := httpClient
+			resp, err := client.Do(request)
+			if err != nil {
+				log.Printf("Master: Error sending DEL request to volume server %s: %v", redirectURI, err)
+				// A 502 Bad Gateway is appropriate if the upstream server (Volume Server) is unreachable or errors out.
+				http.Error(w, "Failed to store file: volume server unreachable or error", http.StatusBadGateway)
+				return
+			}
+			defer resp.Body.Close()
+
+			volumeRespBody, err := io.ReadAll(resp.Body)
+			if err != nil {
+				resultChan <- Result{ID: i + 1, Success: false, Data: err.Error()}
+				return
+			}
+
+			_ = volumeRespBody
+
+			if resp.StatusCode != 204 {
+				resultChan <- Result{
+					ID:      i + 1,
+					Success: false,
+					Data:    fmt.Sprintf("Task %d not completed", i),
+				}
+				return
+			}
+
+			success := resp.StatusCode == 204
+			resultChan <- Result{ID: i + 1, Success: success, Data: fmt.Sprintf("Status: %d", resp.StatusCode)}
+
+			w.WriteHeader(http.StatusNoContent)
+		}()
+	}
+
+	wg.Wait()
+	close(resultChan)
+
+	var failures []string
+	for result := range resultChan {
+		if !result.Success {
+			failures = append(failures, fmt.Sprintf("replica_%d", result.ID))
 		}
+	}
 
-		client := httpClient
-		resp, err := client.Do(request)
-		if err != nil {
-			log.Printf("Master: Error sending DEL request to volume server %s: %v", redirectURI, err)
-			// A 502 Bad Gateway is appropriate if the upstream server (Volume Server) is unreachable or errors out.
-			http.Error(w, "Failed to store file: volume server unreachable or error", http.StatusBadGateway)
-			return
-		}
-		defer resp.Body.Close()
-
-		volumeRespBody, err := io.ReadAll(resp.Body)
-		if err != nil {
-			http.Error(w, "Failed to read response from volume server", http.StatusInternalServerError)
-			return
-		}
-
-		_ = volumeRespBody
-
-		if resp.StatusCode != 204 {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
+	// Only delete from master if ALL replicas succeeded
+	if len(failures) > 0 {
+		log.Printf("DELETE failed on replicas: %v", failures)
+		http.Error(w, fmt.Sprintf("Failed to delete from %d replicas", len(failures)),
+			http.StatusPartialContent)
+		return
 	}
 
 	err = db.Delete([]byte(key), nil)
