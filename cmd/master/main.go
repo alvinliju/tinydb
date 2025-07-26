@@ -134,7 +134,7 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 	// Read the entire body into a buffer
 	var buf bytes.Buffer
 	_, err := io.Copy(&buf, r.Body)
-	fmt.Println(buf.String(), "buf")
+
 	if err != nil {
 		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
 		return
