@@ -10,12 +10,12 @@ _Last updated: July 25, 2025_
 
 ## 🚨 CRITICAL FIXES (Do First!)
 - [ ] **Fix DELETE crash bug** - volume server uses `log.Fatalf()` which crashes the entire server
-- [ ] **Robust DELETE implementation** - all-or-nothing cleanup across ALL replicas (not quorum)
-- [ ] **Better error handling** - replace `fmt.Println()` debug statements with proper logging
+- [X] **Robust DELETE implementation** - all-or-nothing cleanup across ALL replicas (not quorum)
+- [X] **Better error handling** - replace `fmt.Println()` debug statements with proper logging
 
 ## Core Features  
 - [x] ~~Implement write quorum logic (accept PUT/DELETE if 2/3 replicas succeed)~~ ✅ v0.2.0
-- [ ] Implement proper DELETE logic - ensure ALL replicas cleaned up before removing from master
+- [X] Implement proper DELETE logic - ensure ALL replicas cleaned up before removing from master
 - [ ] Build a basic manual heal/repair tool to fix out-of-sync replicas (CLI script or endpoint)
 - [ ] Add data consistency checker - background job to verify replica sync
 

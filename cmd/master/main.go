@@ -131,6 +131,15 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read the entire body into a buffer
+	var buf bytes.Buffer
+	_, err := io.Copy(&buf, r.Body)
+	fmt.Println(buf.String(), "buf")
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+		return
+	}
+
 	//hashes filename in our volume server
 	// since the key and hash algo is the same all the servers should return the same hashed file name
 	var hashKeyFromResponse string = ""
@@ -140,10 +149,7 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 
 	rVolumesFromSelectedSubVol := selectedSubVolume.Replicas
 	fmt.Println(rVolumesFromSelectedSubVol)
-
-	var buf bytes.Buffer
-	io.TeeReader(r.Body, &buf)
-	//we nee to write to all the three volumes
+	fmt.Println(key)
 	var wg sync.WaitGroup
 	resultChan := make(chan Result, 3)
 	for i := 1; i <= 3; i++ {
@@ -179,7 +185,7 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 	value := strings.Join(rVolumesFromSelectedSubVol, ",")
 	fmt.Println(value, "value stored in db")
 
-	err := db.Put([]byte(hashKeyFromResponse), []byte(value), nil)
+	err = db.Put([]byte(hashKeyFromResponse), []byte(value), nil)
 	if err != nil {
 		http.Error(w, "Error saving key to master", http.StatusInternalServerError)
 	}
@@ -207,7 +213,7 @@ func writeToReplica(volumeString string, body io.Reader, key string) (bool, stri
 	fullPath := filepath.Join(fileDir, fileName)
 	fmt.Println(fullPath)
 
-	baseURL := volumeString + "/files/" + key
+	baseURL := volumeString + "/files/" + fileName
 	params := url.Values{}
 	params.Add("filepath", fullPath)
 	redirectURI := baseURL + "?" + params.Encode()
