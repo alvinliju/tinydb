@@ -3,22 +3,27 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	_ "net/http/pprof"
 
+	"github.com/cespare/xxhash"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // now our master gets a put requests and
 // it forwards it to the volume server and return something
+
 var httpClient *http.Client
 
 var db *leveldb.DB
@@ -78,8 +83,14 @@ func getWorker(id int, ch chan<- Result, wg *sync.WaitGroup, replicaUrl string, 
 }
 
 func init() {
+	var tr = &http.Transport{
+		MaxIdleConns:        100,              // Total max idle connections
+		MaxIdleConnsPerHost: 10,               // Max idle connections per host
+		IdleConnTimeout:     30 * time.Second, // Idle connection timeout
+		DisableKeepAlives:   false,
+	}
 	httpClient = &http.Client{
-		Timeout: 10 * time.Second,
+		Transport: tr,
 	}
 
 	var err error
@@ -179,7 +190,28 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeToReplica(volumeString string, body io.Reader, key string) (bool, string) {
-	redirectURI := volumeString + "/files/" + key
+	s := key
+	h := xxhash.New()
+
+	h.Write([]byte(s))
+
+	bs := h.Sum(nil)
+	hashString := hex.EncodeToString(bs)
+	// create a hirearchical directory structure
+	// // based on first 2 ßchar and then insie that another dir with another 2 char
+	parentDir := hashString[:2]
+	childDir := hashString[2:4]
+	fileDir := filepath.Join(parentDir, childDir)
+	fileName := fmt.Sprintf("%s_%s", hashString, key)
+	// construct the full filepath with filename
+	fullPath := filepath.Join(fileDir, fileName)
+	fmt.Println(fullPath)
+
+	baseURL := volumeString + "/files/" + key
+	params := url.Values{}
+	params.Add("filepath", fullPath)
+	redirectURI := baseURL + "?" + params.Encode()
+	fmt.Println(redirectURI)
 	request, err := http.NewRequest("PUT", redirectURI, body)
 	if err != nil {
 		log.Println(err.Error(), http.StatusInternalServerError)

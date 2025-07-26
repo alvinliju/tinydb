@@ -109,16 +109,14 @@ func handlePut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fullPath, err := getFilePath(key)
-	if err != nil {
-		http.Error(w, "Error fetching filepath", http.StatusInternalServerError)
-		return
-	}
-
+	pathFromUrl := r.URL.Query().Get("filepath")
+	fmt.Println(pathFromUrl, "url path")
+	fullPath := filepath.Join(storageRoot, pathFromUrl)
+	fmt.Println(fullPath)
 	fmt.Println(key)
 	// check if it exists
 	parentDir := filepath.Dir(fullPath)
-	err = os.MkdirAll(parentDir, 0755)
+	err := os.MkdirAll(parentDir, 0755)
 	if err != nil {
 		http.Error(w, "Error fetching filepath", http.StatusInternalServerError)
 		return
