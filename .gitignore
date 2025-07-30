@@ -12,3 +12,5 @@ cmd/master/tinydb_master/
 .env
 tinyDB/cmd/master/tinydb_master/
 cmd/master/tinydb_master
+.DS_Store
+**/.DS_Store
