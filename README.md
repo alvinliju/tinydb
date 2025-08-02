@@ -1,4 +1,4 @@
-# TinyDB v2
+# TinyDB v0.3
 
 **Radically simple distributed storage. Fast, minimal, hackable.**
 

@@ -54,6 +54,8 @@ func reqHandler(w http.ResponseWriter, r *http.Request) {
 		handleGET(w, r)
 	case "PUT":
 		handlePUT(w, r)
+	case "DELETE":
+		handleDELETE(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -143,6 +145,45 @@ func remote_put(volumeServers []string, key string, data io.Reader) (bool, strin
 	//return success to as return with hashedKey
 	return true, filename
 }
+func remote_delete(volumeServers []string, key string) bool {
+	//get the key from url
+
+	//we want to get the volume first
+
+	fmt.Println("volumeServers", volumeServers)
+	//hash the key for filename
+	filename := key2filename(key)
+	//append filename at the end of the hash with '_'
+	//send a put request to the selected server
+	//send a put request to the selected server
+	fmt.Println("volumeServers.Volume", volumeServers)
+
+	for _, replicaUrl := range volumeServers {
+
+		url := replicaUrl + "/" + filename
+		fmt.Println("url", url)
+		req, err := http.NewRequest("DELETE", url, nil)
+		if err != nil {
+			return false
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return false
+		}
+		if resp == nil {
+			fmt.Println("error: nil response")
+			return false
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 201 && resp.StatusCode != 204 {
+			return false
+		}
+
+	}
+
+	//return success to as return with hashedKey
+	return true
+}
 
 //write getFunc,addFunc, deleteFunc for leveldb
 
@@ -185,4 +226,22 @@ func handleGET(w http.ResponseWriter, r *http.Request) {
 	redirectUrl := replicas[0] + "/" + key
 	http.Redirect(w, r, redirectUrl, http.StatusPermanentRedirect)
 
+}
+func handleDELETE(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.RequestURI()
+	key := path[1:]
+	data := getKey([]byte(key))
+	replicas := strings.Split(string(data), ",")
+
+	success := remote_delete(replicas, key)
+	if !success {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	err := db.Delete([]byte(key), nil)
+	if err != nil {
+		http.Error(w, "Error deleting metadata", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
